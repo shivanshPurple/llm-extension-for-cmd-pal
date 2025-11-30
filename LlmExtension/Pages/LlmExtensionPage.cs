@@ -664,59 +664,67 @@ internal sealed partial class LlmExtensionPage : DynamicListPage
                 }
                 else
                 {
-                    var command = new SendMessageCommand() { Debug = _client.Config.Debug };
-                    if (!IsLoading)
+                    if (IsLoading)
                     {
-                        command.SendMessage += async (sender, args) =>
+                        return [];
+                    }
+
+                    var command = new SendMessageCommand() { Debug = _client.Config.Debug };
+                    command.SendMessage += async (sender, args) =>
+                    {
+                        try
                         {
-                            try
+                            _messages[0].User = SearchText;
+
+                            IsLoading = true;
+                            UpdateMessagesMemo();
+                            RaiseItemsChanged();
+
+                            await foreach (var response in _client.Chat(_messages))
                             {
-                                _messages[0].User = SearchText;
-
-                                IsLoading = true;
-
-                                await foreach (var response in _client.Chat(_messages))
-                                {
-                                    m.Assistant += response;
-                                    RaiseItemsChanged();
-                                }
-
-                                SearchText = "";
-                                _messages.Insert(0, new() { User = "", Assistant = "" });
+                                m.Assistant += response;
+                                UpdateMessagesMemo();
                                 RaiseItemsChanged();
                             }
-                            catch (Exception ex) when (!_client.Config.Debug && (ex is HttpRequestException || ex is ClientResultException))
-                            {
-                                ErrorToast(
-                                    $"Error calling API over HTTP, is there a '{_client.Config.Service}' server running and accepting connections " +
-                                    $"at '{_client.Config.Url}' with model '{_client.Config.Model}'? Or perhaps the API key is incorrect?"
-                                );
-                            }
-                            catch (HttpOperationException ex) when (_client.Config.Debug)
-                            {
-                                var dataString = "";
-                                foreach (DictionaryEntry item in ex.Data)
-                                {
-                                    dataString += $"{item.Key}: {item.Value}\n";
-                                }
 
-                                if (!string.IsNullOrEmpty(dataString))
-                                {
-                                    dataString = "\n" + dataString;
-                                }
+                            SearchText = "";
+                            _messages.Insert(0, new() { User = "", Assistant = "" });
+                            UpdateMessagesMemo();
+                            RaiseItemsChanged();
+                        }
+                        catch (Exception ex) when (!_client.Config.Debug && (ex is HttpRequestException || ex is ClientResultException))
+                        {
+                            ErrorToast(
+                                $"Error calling API over HTTP, is there a '{_client.Config.Service}' server running and accepting connections " +
+                                $"at '{_client.Config.Url}' with model '{_client.Config.Model}'? Or perhaps the API key is incorrect?"
+                            );
+                        }
+                        catch (HttpOperationException ex) when (_client.Config.Debug)
+                        {
+                            var dataString = "";
+                            foreach (DictionaryEntry item in ex.Data)
+                            {
+                                dataString += $"{item.Key}: {item.Value}\n";
+                            }
 
-                                ErrorToast($"An HTTP error occurred: {ex.Message} with inner exception {ex.InnerException}{dataString}");
-                            }
-                            catch (Exception ex)
+                            if (!string.IsNullOrEmpty(dataString))
                             {
-                                ErrorToast(_client.Config.Debug ? ex.ToString() : "An error occurred when attempting to chat with LLM");
+                                dataString = "\n" + dataString;
                             }
-                            finally
-                            {
-                                IsLoading = false;
-                            }
-                        };
-                    }
+
+                            ErrorToast($"An HTTP error occurred: {ex.Message} with inner exception {ex.InnerException}{dataString}");
+                        }
+                        catch (Exception ex)
+                        {
+                            ErrorToast(_client.Config.Debug ? ex.ToString() : "An error occurred when attempting to chat with LLM");
+                        }
+                        finally
+                        {
+                            IsLoading = false;
+                            UpdateMessagesMemo();
+                            RaiseItemsChanged();
+                        }
+                    };
 
                     return [new ListItem(command) { Title = "Press enter to send" }];
                 }
