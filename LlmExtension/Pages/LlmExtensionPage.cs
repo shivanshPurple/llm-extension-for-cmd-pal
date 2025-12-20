@@ -97,26 +97,17 @@ internal sealed partial class LlmExtensionPage : DynamicListPage
             // Build history
             ChatHistory history = [];
             history.AddSystemMessage(Config.System);
-            foreach (var message in messages.Reverse())
+            var relevantMessages = messages.Take(Config.History).Reverse();
+            foreach (var message in relevantMessages)
             {
                 if (!string.IsNullOrEmpty(message.User))
                 {
                     history.AddUserMessage(message.User);
-
-                    if (history.Count >= Config.History + 1)
-                    {
-                        break;
-                    }
                 }
 
                 if (!string.IsNullOrEmpty(message.Assistant))
                 {
                     history.AddAssistantMessage(message.Assistant);
-
-                    if (history.Count >= Config.History + 1)
-                    {
-                        break;
-                    }
                 }
             }
 
